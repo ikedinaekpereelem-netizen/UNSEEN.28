@@ -1,0 +1,71 @@
+const express = require('express');
+const router = express.Router();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const auth = require('../middleware/auth');
+const adminAuth = require('../middleware/adminAuth');
+const Transaction = require('../models/Transaction');
+const User = require('../models/User');
+
+// Admin-only wallet features
+router.post('/create-payment-intent', auth, adminAuth, async (req, res) => {
+  const { amount } = req.body;
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: 'usd',
+      payment_method_types: ['card'],
+      metadata: { integration_check: 'wallet_deposit', userId: req.user.userId }
+    });
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not create paymentIntent' });
+  }
+});
+
+router.post('/deposit', auth, adminAuth, async (req, res) => {
+  const { paymentIntentId, amount } = req.body;
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (intent.status !== 'succeeded' || intent.amount_received < amount * 100) {
+      return res.status(400).json({ error: 'Payment not valid' });
+    }
+    // Card data not stored or seen
+    const txn = new Transaction({
+      userId: req.user.userId,
+      amount,
+      type: 'deposit',
+      status: 'pending',
+      timestamp: new Date()
+    });
+    await txn.save();
+    res.json({ message: 'Deposit registered. Await admin approval.' });
+  } catch (err) {
+    return res.status(400).json({ error: 'Stripe payment failed' });
+  }
+});
+
+router.post('/withdraw', auth, adminAuth, async (req, res) => {
+  const { userId, amount, destination } = req.body;
+  const user = await User.findById(userId);
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if ((user.wallet_balance || 0) < amount) return res.status(400).json({ error: "Insufficient balance" });
+  user.wallet_balance -= amount;
+  await user.save();
+  const txn = new Transaction({
+    userId: user._id,
+    amount,
+    type: 'withdrawal',
+    status: 'pending',
+    timestamp: new Date(),
+    destination
+  });
+  await txn.save();
+  res.json({ message: 'Withdrawal created. Pending admin approval.', txn });
+});
+
+router.get('/txns', auth, adminAuth, async (req, res) => {
+  const txns = await Transaction.find({ status: 'pending' }).populate('userId', 'username wallet_balance');
+  res.json(txns);
+});
+
+module.exports = router;

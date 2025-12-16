@@ -1,0 +1,12 @@
+const mongoose = require('mongoose');
+
+const txnSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  amount: { type: Number, required: true },
+  type: { type: String, enum: ['deposit', 'withdrawal'], required: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], required: true },
+  timestamp: { type: Date, default: Date.now },
+  destination: { type: String } // for admin withdrawal
+});
+
+module.exports = mongoose.model('Transaction', txnSchema);

@@ -1,0 +1,35 @@
+import React, { createContext, useState, useEffect } from 'react';
+
+export const AuthContext = createContext();
+
+export function AuthProvider({ children }) {
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [active, setActive] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    if (token) {
+      fetch('/api/user/profile', {
+        headers: { Authorization: 'Bearer ' + token }
+      })
+        .then(res => res.json())
+        .then(data => {
+          setActive(data.active);
+          setIsAdmin(data.isAdmin);
+          setEmail(data.email);
+          setUsername(data.username);
+        });
+    }
+  }, [token]);
+
+  const login = tok => { localStorage.setItem('token', tok); setToken(tok); };
+  const logout = () => { localStorage.removeItem('token'); setToken(''); setActive(false); setIsAdmin(false); setEmail(''); setUsername(''); };
+
+  return (
+    <AuthContext.Provider value={{ token, login, logout, active, isAdmin, email, username }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}

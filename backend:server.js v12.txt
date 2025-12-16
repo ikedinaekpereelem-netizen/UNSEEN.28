@@ -1,0 +1,16 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const authRoutes = require('./routes/authRoutes');
+const walletRoutes = require('./routes/walletRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const app = express();
+
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/admin', adminRoutes);
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/countryxconnect';
+mongoose.connect(MONGODB_URI)
+  .then(() => app.listen(5000, () => console.log('CountryXConnect running on port 5000')))
+  .catch(console.error);
